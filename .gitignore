@@ -1,0 +1,10 @@
+# D Stuff
+out/
+dub.selections.json
+
+# DDOC/DDOX
+docs.json
+__dummy_docs/
+
+# VSCode Junk
+.vscode/
