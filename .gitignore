@@ -1,5 +1,6 @@
 # D Stuff
 out/
+.dub/
 dub.selections.json
 
 # DDOC/DDOX
