@@ -9,4 +9,3 @@
     Authors:   Luna Nielsen
 */
 module nugraphics.drawing;
-

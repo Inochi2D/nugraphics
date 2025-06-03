@@ -9,7 +9,7 @@
     Authors:   Luna Nielsen
 */
 module nugraphics.math.linalg;
-import nlmath = nulib.math;
+import nugraphics.math;
 
 /**
     A 2D point
@@ -46,6 +46,8 @@ struct Vec2Impl(T) {
             T y;
         }
         T[2] data;
+
+        static if (is(f32x4)) f32x4 simd;
     }
 
     /**
@@ -66,6 +68,7 @@ struct Vec2Impl(T) {
     /**
         Squared length of the vector.
     */
+    @property
     T sqlength() {
         return cast(T)(
             ((cast(float)x) ^^ 2) + 
@@ -76,11 +79,23 @@ struct Vec2Impl(T) {
     /**
         Length of the vector.
     */
+    @property
     T length() {
-        return cast(T)nlmath.sqrt(
+        return cast(T).sqrt(
             ((cast(float)x) ^^ 2) + 
             ((cast(float)y) ^^ 2)
         );
+    }
+    
+    /**
+        Whether the vector contains finite values.
+    */
+    @property
+    bool isFinite() {
+        static if (__traits(isFloating, T))
+            return .isFinite(x) && .isFinite(y);
+        else
+            return true;
     }
 
     /**
@@ -98,7 +113,7 @@ struct Vec2Impl(T) {
     T distance(Vec2Impl!T other) {
         T tx = this.x - other.x;
         T ty = this.y - other.y;
-        return cast(T)nlmath.sqrt(cast(double)(tx * tx + ty * ty));
+        return cast(T).sqrt(cast(double)(tx * tx + ty * ty));
     }
 
     /**
@@ -178,6 +193,7 @@ enum isVec2(T) = is(T == Vec2Impl!U, U...);
     Truncates the values of the vector.
 */
 auto trunc(T)(T value) if (isVec2!T) {
+    import nlmath = nulib.math;
     return T(
         cast(T.vt)nlmath.trunc(cast(double)value.x), 
         cast(T.vt)nlmath.trunc(cast(double)value.y)
@@ -188,6 +204,7 @@ auto trunc(T)(T value) if (isVec2!T) {
     Gets a vector with both axis made absolute.
 */
 auto abs(T)(T value) if (isVec2!T) {
+    import nlmath = nulib.math;
     return T(
         T.vt(nlmath.abs!double(cast(double)value.x)), 
         T.vt(nlmath.abs!double(cast(double)value.y))

@@ -9,8 +9,10 @@
     Authors:   Luna Nielsen
 */
 module nugraphics.drawing.image;
-import nugraphics.math.color;
-import nulib.math;
+import nugraphics.drawing;
+import nugraphics.math;
+
+import nulib.collections.vector;
 import numem;
 
 /**
@@ -19,113 +21,99 @@ import numem;
     Images loaded are always converted to 32-bit RGBA internally,
     irrespective of the byte-size of the components.
 */
+final
 class Image : NuRefCounted {
 private:
-@nogc:
-    uint channels_;
-    uint width_;
-    uint height_;
     void[] data_;
+    uint iWidth;
+    uint iHeight;
+    PixelFormat iFormat;
 
 public:
+@nogc:
+
+    ~this() {
+        if (data_)
+            this.data_ = this.data_.nu_resize(0);
+    }
 
     /**
-        Whether the image is initialized.
+        Constructs a new image.
     */
-    final
-    @property bool isInitialized() { return data_.ptr !is null; }
+    this(uint width, uint height, PixelFormat format) {
+        this.iWidth = width;
+        this.iHeight = height;
+        this.iFormat = format;
+        this.data_ = data_.nu_resize(
+            width * height * iFormat.toAlignment()
+        );
+    }
 
     /**
         Width of the image in pixels
     */
-    final
-    @property uint width() { return width_; }
+    @property uint width() nothrow pure {
+        return iWidth;
+    }
 
     /**
         Height of the image in pixels
     */
-    final
-    @property uint height() { return height_; }
+    @property uint height() nothrow pure {
+        return iHeight;
+    }
+
+    /**
+        Number of channels per pixel.
+    */
+    @property uint channels() nothrow pure {
+        return iFormat.toChannelCount;
+    }
+
+    /**
+        The original format of the image data.
+
+        The internal format may differ from the origin format,
+        see $(D internalFormat) for the format used internally.
+    */
+    @property PixelFormat pixelFormat() nothrow pure {
+        return iFormat;
+    }
 
     /**
         Number of channels per pixel; The channels
         will always be aligned to 32 bits.
     */
-    final
-    @property uint channels() { return channels_; }
-
-    /**
-        Byte stride in a single scanline of the image.
-    */
-    final
-    @property uint stride() { return width_*channels_; }
-
-    /**
-        Gets a raw view into the data stored in the image.
-    */
-    final
-    @property float[] rawData() { return cast(float[])data_; }
-
-    /**
-        Gets a view into the colors stored in the image.
-    */
-    final
-    @property Color[] colors() { return cast(Color[])data_; }
-
-    // Destructor
-    ~this() {
-
-        // Clear data.
-        this.data_ = data_.nu_resize(0);
+    @property uint stride() nothrow pure {
+        return width * channels;
     }
 
     /**
-        Constructs an uninitialized image.
+        Raw data of the layer.
     */
-    this() { }
-    
+    @property void[] rawData() nothrow pure {
+        return data_;
+    }
+
     /**
-        Constructs a new uninitialized image.
+        Clears the entire image with the given binary
+        value.
 
         Params:
-            width = Width of the image
-            height = Height of the image
-            channels = Channels in the image
+            clearValue = The value to write to the image buffer.
     */
-    this(uint width, uint height, uint channels) {
-        this.width_ = width;
-        this.height_ = height;
-        this.channels_ = min(1, channels);
+    void clearAll(ubyte clearValue) {
+        (cast(ubyte[])this.data_)[0..$] = clearValue;
     }
 
     /**
-        Constructs a new image from a file.
+        Gets a pixel at the given coordinates.
     */
-    this(string file) {
-        import gamut = gamut;
-        gamut.Image image;
-        image.loadFromFile(file, 
-            // Load as RGBA
-            gamut.LOAD_RGB | gamut.LOAD_ALPHA | gamut.LOAD_FP32 |
-            
-            // And with no gaps.
-            gamut.LAYOUT_GAPLESS | gamut.LAYOUT_VERT_STRAIGHT
-        );
+    Color getPixel(int x, int y) {
+        if (x < 0 || y < 0 || x >= width || y >= height) 
+            return Color.init;
 
-        this.width_ = image.width;
-        this.height_ = image.height;
-        this.channels_ = image.channels;
-        this.data_ = cast(float[])(image.allPixelsAtOnce()).nu_dup();
-        nogc_delete(image);
-    }
-
-    /**
-        Initializes the image with empty data.
-    */
-    final
-    void initialize() {
-        this.data_ = this.data_.nu_resize(width_*height_*channels_*float.sizeof);
-        (cast(float[])this.data_)[0..$] = 0f;
+        return this.scanline(y).fromLine(x, iFormat);
     }
 
     /**
@@ -133,35 +121,36 @@ public:
 
         Params:
             y = The scanline to fetch.
-    */
-    Color[] scanline(uint y) {
-        size_t offset = y * stride;
-        return cast(Color[])this.data_[offset..offset+stride];
-    }
-
-    /**
-        Gets the RGBA pixel color at the given pixel
-        location.
-    */
-    Color getPixel(uint x, uint y) {
-        return scanline(y)[x];
-    }
-
-    /**
-        Blits the provided image onto this image.
-    */
-    void blit(Image image, uint x, uint y, BlendingMode mode, BlendingOp op = BlendingOp.srcOver) {
         
-        // Calculate amount of scanlines to blit.
-        int blitHeight = min(x+image.height, height)-x;
-        if (blitHeight <= 0)
-            return;
+        Returns:
+            A untyped slice of the scanline, or an 
+            empty slice on failure.
+    */
+    void[] scanline(uint y) nothrow {
+        size_t offset = y * stride;
+        if (offset >= data_.length)
+            return [];
 
-        foreach(line; 0..blitHeight) {
-            Color[] srcline = image.scanline(line);
-            Color[] dstline = this.scanline(y+line);
-            
-        }
+        return this.data_[offset..offset+stride];
     }
 }
 
+/**
+    A tile
+*/
+struct Tile {
+
+    /**
+        The pixel format of the tile.
+    */
+    PixelFormat format;
+
+    /**
+        4096 bytes of memory in the tile.
+    */
+    union {
+        void[4096] memory;
+        float[512][512] f32;
+        __m128[16][16] rgba32;
+    }
+}

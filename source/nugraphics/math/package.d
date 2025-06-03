@@ -10,7 +10,15 @@
 */
 module nugraphics.math;
 
-public import nugraphics.math.color;
-public import nugraphics.math.blending;
 public import nugraphics.math.linalg;
+public import nugraphics.math.color;
 public import nulib.math;
+public import inteli;
+
+/**
+    4 32-bit floats for SIMD operation.
+*/
+static if (is(float4))
+    alias f32x4 = __m128;
+else
+    alias f32x4 = void;
